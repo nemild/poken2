@@ -6,6 +6,7 @@ const SOFA = require('sofa-js');
 const _ = require('lodash');
 const models = require('./bot/models');
 const constants = require('./poker-constants.js');
+const unit = require('ethjs-unit');
 
 const MSGS = constants.MSGS;
 const NUMBER_TEXT_MAP = constants.NUMBER_TEXT_MAP;
@@ -21,11 +22,10 @@ const bot = new Bot();
 
 bot.onEvent = async function(session, message) {
   const tokenIdee = session.get('tokenId');
-
   const userState = session.get('userState');
   const active = session.get('active');
   const userRequest = message.body && message.body.toLowerCase();
-  const gameId = session.get('gameId');
+  const gameId = session.get('gameId') && parseInt(session.get('gameId'), 10);
   const commandValue = message && message.content && message.content.value;
   const ethValue = message && message.ethValue;
 
@@ -34,15 +34,22 @@ bot.onEvent = async function(session, message) {
   console.log(`ethValue: ${ethValue}`);
   console.log(`userRequest: ${userRequest}`);
 
+  console.log(`gameId: ${gameId}`);
+  console.log(`userState: ${userState}`);
+
   let game = null;
   let gameUser = null;
 
   if (gameId) {
     try {
       game = await Game.findOne({
-        id: gameId,
+        where: {
+          id: gameId,
+        },
         include: [{ model: GameUser, include: [User] }]
       });
+      console.log(JSON.stringify(game, null, 2));
+      console.log(`Loaded Game Id: ${game.id}`);
     } catch (error) {
       console.error(error);
     }
@@ -76,7 +83,11 @@ bot.onEvent = async function(session, message) {
 
     if (gameUser) {
       try {
+        console.log('DESTROYED');
         await gameUser.destroy();
+        if (game && game.gameUsers.length === 1) {
+          await game.destroy();
+        }
       } catch (e) {
         console.error(e.stack);
       }
@@ -107,62 +118,90 @@ bot.onEvent = async function(session, message) {
     } else if (userState === 'started' && commandValue.startsWith('max_buyin_')) {
       const matched = message.value.match(/^max_buyin_([.\d]+)/);
       const decimalValue = parseFloat(matched[1]);
-      console.log('hello');
-      console.log(decimalValue);
 
+      let newGame = null;
+      let gameUser = null;
       try {
-        const newGame = await Game.create({
+        newGame = await Game.create({
           maxBuyin: decimalValue,
           bigBlind: decimalValue / 100,
           state: 'waiting'
         });
 
-        console.log('IDs');
-        console.log(user.id);
-        console.log(newGame.id);
-
-        const gameUser = await GameUser.create({
+        gameUser = await GameUser.create({
           userId: user.id,
           gameId: newGame.id,
           state: 'spectating'
+        });
+        console.log(JSON.stringify(gameUser, null, 2));
+      } catch (e) {
+        console.error(e.stack);
+        console.error(e);
+      }
+      session.set('gameId', newGame.id);
+      session.set('userState', 'spectating');
+
+      session.requestEth(decimalValue, 'for buyin');
+    } else if (userState === 'spectating') {
+
+    }
+  } else if (message.type === 'Payment') {
+    console.log(userState);
+    console.log(commandValue);
+    console.log(JSON.stringify(message, null, 2));
+
+    if (userState === 'spectating') {
+      const maximumBuyin = game.maxBuyin;
+      const minimumBuyin = maximumBuyin / 100;
+      let collectedAmount = null;
+
+      if (ethValue < minimumBuyin) {
+        session.sendEth(ethValue);
+        reply(session, MSGS.startApp.buyin.belowMinimum(minimumBuyin));
+        return;
+      } else if (ethValue > maximumBuyin) {
+        session.sendEth(ethValue - maximumBuyin);
+        reply(session, MSGS.startApp.buyin.aboveMaximum);
+        collectedAmount = maximumBuyin;
+      } else {
+        session.reply(MSGS.startApp.buyin.simpleSuccess(ethValue));
+        collectedAmount = ethValue;
+      }
+      session.set('userState', 'playing');
+      session.set('balance', collectedAmount);
+
+      try {
+        await gameUser.update({
+          balance: collectedAmount
         });
       } catch (e) {
         console.error(e.stack);
       }
 
-      session.set('gameId', game.id);
-      session.set('userState', 'spectating');
-    } else if (userState === 'spectating') {
-
-    }
-  } else if (message.type === 'Payment') {
-    if (userState === 'spectating') {
-      if (commandValue === 'buyIn') {
-        const maximumBuyin = game.maxBuyin;
-        const minimumBuyin = maximumBuyin / 100;
-        let collectedAmount = null;
-
-        if (ethValue < minimumBuyin) {
-          session.sendEth(ethValue);
-          reply(session, MSGS.start.buyin.belowMinimum(minimumBuyin));
-          return;
-        } else if (ethValue > maximumBuyin) {
-          session.sendEth(ethValue - maximumBuyin);
-          reply(session, MSGS.start.buyin.aboveMaximum);
-          collectedAmount = maximumBuyin;
-        } else {
-          session.reply(MSGS.start.buyin.simpleSuccess(ethValue));
-          collectedAmount = ethValue;
-        }
-        session.set('userState', 'playing');
-        session.set('balance', collectedAmount);
-        sendMessageToAll(session, game, `${session.player} bought in for ${collectedAmount}!`);
-      } else { // Refund if they shouldn't be sending us money
-        session.sendEth(ethValue, function(session, error, result) {
-          console.log(error);
+      // Reload game in case changes
+      try {
+        game = await Game.findOne({
+          where: {
+            id: gameId,
+          },
+          include: [{ model: GameUser, include: [User] }]
         });
-        reply(session, MSGS.other.noNeedForPayment);
+      } catch (error) {
+        console.error(error);
       }
+      console.log(JSON.stringify(game, null, 2));
+
+      try {
+        sendMessageToAll(game, `A player bought in for ${collectedAmount}!`);
+      } catch (e) {
+        console.error(e.stack);
+
+      }
+    } else { // Refund if they shouldn't be sending us money
+      session.sendEth(ethValue, function(session, error, result) {
+        console.log(error);
+      });
+      reply(session, MSGS.other.noNeedForPayment);
     }
   } else if (!userState) {
     return reply(
@@ -203,8 +242,9 @@ function checkToStartGame(session, game) {
 // Optional sendOptions function
 // Optional message
 function sendMessageToAll(game, message, responses = null) {
-  for (let i = 0, len = game.gameUser.length; i < len; i += 1) {
-    const elem = game.gameUser[i];
+  console.log(JSON.stringify(game.gameUsers, null, 2));
+  for (let i = 0, len = game.gameUsers.length; i < len; i += 1) {
+    const elem = game.gameUsers[i];
     sendAll(elem.user.tokenIdee, message, responses);
   }
 }

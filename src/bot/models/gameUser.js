@@ -9,16 +9,16 @@ module.exports = function(sequelize, DataTypes) {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: User,
-          key: 'gameId',
+          model: Game,
+          key: 'gameId'
         }
       },
       userId: {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: Game,
-          key: 'userId',
+          model: User,
+          key: 'userId'
         }
       },
         state: {

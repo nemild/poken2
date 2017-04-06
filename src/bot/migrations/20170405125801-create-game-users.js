@@ -12,10 +12,12 @@ module.exports = {
       gameId: {
         type: Sequelize.INTEGER,
         allowNull: false,
+        references: { model: 'games', key: 'id' }
       },
       userId: {
         type: Sequelize.INTEGER,
         allowNull: false,
+        references: { model: 'users', key: 'id' }
       },
         state: {
           type: Sequelize.ENUM('spectating', 'sittingOut', 'playing', 'inHand', 'folded', 'allIn'),

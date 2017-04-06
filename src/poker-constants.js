@@ -39,7 +39,7 @@ module.exports.MSGS = {
     }
   },
   other: {
-    noNeedForPayment: 'Sorry, you shouldn\'t be sending me money'
+    noNeedForPayment: 'Sorry, you shouldn\'t be sending me money, I refunded what you sent me excluding transaction fees'
   }
 };
 
