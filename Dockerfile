@@ -14,4 +14,5 @@ ADD src /usr/src/bot/src
 ADD package.json /usr/src/bot/package.json
 WORKDIR /usr/src/bot
 
-CMD nodemon -L src/bot.js config.yml
+CMD sleep 5 && ./node_modules/sequelize-cli/bin/sequelize db:migrate --url 'postgres://token:va5uOdJBqu2dZ1@postgres:5432/token' --models-path ./src/bot/models --migrations-path ./src/bot/migrations --seeders-path ./src/bot/seeders --env production && nodemon -L src/bot.js config.yml
+

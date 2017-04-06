@@ -1,64 +1,88 @@
-# Token SOFA App
+# Poken
+A poker game on Token. 
 
-This repo helps you build a [Token app](https://www.tokenbrowser.com) in Javascript.
+### Key components
+_Centralized_
+1. Game rooms
+2. Balances and Game Actions
+3. Card Gameplay
+4. Scoring System (using [][1]) 
 
-The sample bot can:
+_Decentralized_
+5. Dapp Poker application
 
-* send messages
-* send and request money
-* create simple UI for buttons and menus
-* store sessions and state for each user
+### Game Play
+- User prompted whether to join a game room or create a new game
+	- Create new game: (Can be public or private, needs a name)
+- When joining, can start a game if more than 1 player
+- Join and leave notification
 
-TODO
+##### Sample gameplay:
+Welcome to Poken! Do you want to join an existing game room or create a new one? (Actions: Join, Create)
 
-* sending image messages
-* creating web view UIs
+Create new game: Great, give your game room a name: SOME NAME
+Join a game: Which game? (Actions: will show listing or let them type in a name)
 
-## Launch your own Token app in 5 minutes
+You are the first person in this game room. Notify your friends that the game is running.
 
-Read our [guide to creating a Token app](http://developers.tokenbrowser.com/docs/creating-a-token-app).
+@abc just joined. Actions: Start game, exit room, wait
 
-When ready, fork this repo and deploy it to Heroku.
+Choice: Start game
+You got "Jack of Spades and King of Hearts" Actions: (Match/Check, Raise $set amount, Raise Custom, Fold)
+@jb matched
+@asda raised
+Total pot: 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+Flop: Cards a/b/c.
+@jb checked
+Total pot: 
 
-Then check out [`src/bot.js`](src/bot.js) to start changing the bot logic.
+Turn: 
 
-## Running locally with Docker
+River:
 
-You can run the project locally with
+### Other Ideas
+- Alternate token for use specifically with this game (and pre allocations)
+- Need to make this fun and addictive (jokes, memes, random points)
 
-```
-docker-compose up
-```
+### Data Model
+**Game**
 
-If any new depencies are added you can rebuild the project with
+- name
+- state
+- bigBlind
+- ante
+- maximumBuyIn
+- game_users (association)
+	- user
+	- balance
+	- playing
+	- active
+	- state (sitting_out, playing, folded, all in)
+	- state timestamp of when they hit each state (to order sidepot)
 
-```
-docker-compose build
-```
+**Hand**
 
-To reset the postgres database in your dev environment you can use
+- state (ante_and_blinds, preFlop, flop, turn, river)
+- pot
+- sidePot (0 to many)
+- bigblind
+- littleblind
+- dealer
 
-```
-docker-compose down -v
-```
 
-## Architecture
+**Action**
 
-Deploying a Token app requires a few processes to run:
+- user (assocation)
+- game (association)
+- action
+- amount
+- number: auto incrementing integer
+- time_limit
 
-* **token-headless-client**<br>
-  This is a client we provide (similar to the iOS or Android client) that provides a wrapper around the Token backend services. It also handles end-to-end encrypting all messages using the Signal protocol. It is written in Java and runs in the background, proxying all the requests to amd from your bot.
-* **redis**<br>
-  We use redis pub/sub to provide a connection between the token-headless-client and your bot.
-* **bot.js**<br>
-  This is where all your app logic lives.
-* **postgres**<br>
-  Postgres is used to store session data so you can persist state for each user who talks to your bot (similar to cookies in a web browser).
+**User**
 
-![diagram](docs/images/app-architecture.png)
+- username
+- address
 
-## See also
-
-* [https://www.tokenbrowser.com]
+[1]:	https://github.com/goldfire/pokersolver "PokerSolver"
