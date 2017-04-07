@@ -24,8 +24,9 @@ module.exports = function(sequelize, DataTypes) {
         }
       },
         state: {
-          type: DataTypes.ENUM('spectating', 'playing'),
-          allowNull: false
+          type: DataTypes.ENUM('spectating', 'playing', 'readyToPlay', 'readyToLeave'),
+          allowNull: false,
+          defaultVale: 'spectating'
         },
         position: { // 0 - 8
             type: DataTypes.INTEGER,

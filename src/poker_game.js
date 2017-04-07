@@ -4,6 +4,9 @@ const _ = require('lodash');
 // Remaining
 // Who should be betting
 // What's bet so far, and actual game play
+function toGraphicalCard(card) {
+	return card.replace(/s/, '♠️').replace(/h/, '♥️').replace(/c/, '♣️c').replace(/d/, '♦️');
+}
 
 class PokerGame {
 	// const STATES = [ 'STARTED', 'FLOPPED', 'TURNED', 'RIVERED', 'COMPLETE' ];
@@ -57,9 +60,16 @@ class PokerGame {
 		return cards;
 	}
 
-	toGraphicalCard(card) {
-		return card.replace(/s/, '♠️').replace(/h/, '♥️').replace(/c/, '♣️c').replace(/d/, '♦️');
+	toGraphicalCards(cards) {
+		result = [];
+		for (let i = 0, len = cards.length; i < len; i += 1) {
+		  const elem = cards[i];
+
+			result.push(toGraphicalCard(elem));
+		}
+		return result;
 	}
+
 
 	// Returns
 	startGame() {

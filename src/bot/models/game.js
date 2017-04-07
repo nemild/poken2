@@ -1,9 +1,10 @@
-/* eslint no-undef: 0 */
+/* eslint no-undef: 0, max-len: 0 */
 
 'use strict';
 
 const SOFA = require('sofa-js');
 const _ = require('lodash');
+const PokerGame = require('../../poker_game');
 
 function sendToUser(bot, userToken, message, responses) {
   const controls = generateControls(responses);
@@ -82,6 +83,61 @@ module.exports = function(sequelize, DataTypes) {
 
         const currentPositions = _.map(gameUsers, 'position') || [];
         return _.sample(_.difference(_.range(9), currentPositions));
+      },
+      async startNewHand() { // warning, destructive so only call if you want to start a new hand and delete old one
+        try {
+          const Hand = sequelize.models.hand;
+          const GameUser = sequelize.models.gameUser;
+
+          const gameUsers = await GameUser.findAll({
+            where: {
+              gameId: self.id,
+              status: 'playing'
+            },
+            order: 'position ASC',
+          });
+
+          let dealerPosition = 0;
+          const existingHand = await Hand.findOne({
+            where: {
+              gameId: self.id
+            }
+          });
+
+          if (existingHand) {
+            dealerPosition = (existingHand.dealerPosition + 1) % gameUsers.length;
+            await existingHand.destroy();
+          }
+
+          const hand = await Hand.create({
+            gameId: self.id,
+            bigBlind: this.bigBlind,
+            smallBlind: this.bigBlind / 2,
+            state: 'anteAndBlinds',
+            dealerPosition,
+            pokerCardStateData: (new PokerGame( gameUsers.length, null )).getState()
+          });
+
+          return hand;
+        } catch (e) {
+          console.error(e.stack);
+        }
+
+        return null;
+      },
+      async handRunning() {
+        try {
+          const existingHand = await Hand.findOne({
+            where: {
+              gameId: self.id
+            }
+          });
+
+          return !!existingHand;
+        } catch (e) {
+          console.error(e.stack);
+        }
+        return null;
       },
       async sendMessageToAll(bot, message, responses = null) {
         let gameUsers;

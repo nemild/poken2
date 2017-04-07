@@ -3,23 +3,7 @@
 'use strict';
 
 const Game = require('./game');
-
-function nextCurrentPosition(hand) {
-  const currentMaxAmount = _.max(_.map(hand.gameUserStatuses, 'potAmount'));
-  const startPosition = this.currentPosition;
-  const firstToActIndex = (this.dealerPosition + 1) % (SIZE);
-
-  // MAKE SURE YOU CAN GO THROUGH ONCE
-
-  while (true) {
-    const nextGameUserStatus = gameUserStatuses[++this.currentPosition % gameUsers.length];
-    if (nextGameUserStatus.status !== 'folded' && currentMaxAmount > nextGameUserStatus.potAmount) {
-      return this.currentPosition;
-    } else if (startPosition === this.currentPosition) {
-      return null;
-    }
-  }
-}
+const GameUser = require('./gameUser');
 
 async function getNextPlayer(GameUser) {
   // who is next player and what do they have to bid, else null
@@ -49,6 +33,15 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.ENUM('anteAndBlinds', 'preflop', 'flop', 'turn', 'river', 'complete'),
       allowNull: false,
     },
+    waitingGameUserId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: GameUser, key: 'waitingGameUserId' }
+      },
+    pokerCardStateData: {
+        type: DataTypes.JSONB,
+        defaultValue: {}
+      },
     gameUserStatuses: {
         type: DataTypes.JSONB,
         allowNull: true,
@@ -67,19 +60,35 @@ module.exports = function(sequelize, DataTypes) {
         type: DataTypes.DECIMAL,
         allowNull: false,
         defaultValue: 0
-        },
-      bigblind: {
+      },
+      bigBlind: {
           type: DataTypes.INTEGER,
-          allowNull: true,
+          allowNull: true
         },
-        smallBlind: {
-            type: DataTypes.INTEGER,
-            allowNull: true,
-          }
+      smallBlind: {
+          type: DataTypes.INTEGER,
+          allowNull: true
+      }
   }, {
     hooks: { },
     indexes: [],
     instanceMethods: {
+      nextCurrentPosition() {
+        const currentMaxAmount = _.max(_.map(self.gameUserStatuses, 'potAmount'));
+        const startPosition = this.currentPosition;
+        const firstToActIndex = (this.dealerPosition + 1) % (SIZE);
+
+        // MAKE SURE YOU CAN GO THROUGH ONCE
+
+        while (true) {
+          const nextGameUserStatus = gameUserStatuses[++this.currentPosition % gameUsers.length];
+          if (nextGameUserStatus.status !== 'folded' && currentMaxAmount > nextGameUserStatus.potAmount) {
+            return this.currentPosition;
+          } else if (startPosition === this.currentPosition) {
+            return null;
+          }
+        }
+      },
       totalPotSize() {
         if (
           !this.gameUserStatuses || this.gameUserStatuses.length === 0
@@ -90,18 +99,34 @@ module.exports = function(sequelize, DataTypes) {
           return sum + n.potAmount;
         });
       },
+      async handleAction(session, gameUserId, action, amount) {
+        if (waitingGameUserId !== gameUserId) {
+          return session.reply('Sorry, it\'s not your turn');
+        }
+
+        // Record and execute next action
+
+      },
       async nextAction(bot) {
-        let gameUsers;
-        const Game = sequelize.models.gameUser;
+        let gameUsers, game;
+        const Game = sequelize.models.game;
         const User = sequelize.models.user;
+        const GameUser = sequelize.models.gameUser;
 
         try {
           gameUsers = await GameUser.findAll({
             where: {
+              gameId: self.gameId,
               status: 'playing'
             },
             order: 'position ASC',
             include: [User]
+          });
+
+          game = await Game.findOne({
+            where: {
+              id: self.gameId
+            }
           });
         } catch (e) {
           console.error(e.stack);
@@ -127,7 +152,7 @@ module.exports = function(sequelize, DataTypes) {
           if ((bigBlindGameUser.balance - this.bigBlind) < 0) {
             // kick out, increment to next one
             // check game
-          } else if ((smallBlindGameUser.balance - this.bigBLind) < 0) {
+          } else if ((smallBlindGameUser.balance - this.bigBlind) < 0) {
             // kick out, increment to next one
             // check game
           }
@@ -171,9 +196,16 @@ module.exports = function(sequelize, DataTypes) {
         } else {
           // increment current position, decide prompt, Deal, Message with options to one party or winner
         }
+        // game.sendMessageToAll(bot, );
 
+        const pokerGame = new PokerGame(gameUsers.length, self.pokerCardStateData);
+        this.pokerCardStateData = pokerGame.getState();
+        await this.save();
 
-        //
+        pokerGame.startGame();
+        pokerGame.toGraphicalCards(pokerGame.getFlop());
+        pokerGame.toGraphicalCards(pokerGame.getTurn());
+        pokerGame.toGraphicalCards(pokerGame.getRiver());
       }
 
 

@@ -47,7 +47,10 @@ bot.onEvent = async function(session, message) {
         where: {
           id: gameId,
         },
-        include: [{ model: GameUser, include: [User] }]
+        include: [
+            { model: GameUser, include: [User] },
+            { model: Hand }
+          ]
       });
       console.log(JSON.stringify(game, null, 2));
       console.log(`Loaded Game Id: ${game.id}`);
@@ -118,6 +121,35 @@ bot.onEvent = async function(session, message) {
           { label: '10', value: 'max_buyin_10' }
         ]
       );
+    } else if ( commandValue === 'startGame' ) {
+      if (game.state === 'waiting') {
+        try {
+          const readyToPlayGameUsers = await GameUser.findAll({
+            where: {
+              gameId: game.id,
+              status: 'readyToPlay'
+            }
+          });
+
+          if (readyToPlayGameUsers.length > 1) {
+            const hand = await game.startNewHand();
+          } else {
+            return reply(
+              session,
+              `Need for players - invite someone to join the game: ${game.name}`
+            );
+          }
+        } catch (e) {
+          console.error(e.stack);
+        }
+      }
+
+      return reply(
+        session,
+        'That game has already started'
+      );
+    } else if ( commandValue === 'wait_to_start' ) {
+
     } else if (commandValue === 'join_existing') {
       // TODO:
       return await handleJoinListing(session);
@@ -136,7 +168,21 @@ bot.onEvent = async function(session, message) {
 
       return await joinOrCreateGame(session, user.id, null, decimalValue);
     } else if (userState === 'spectating') {
-    }
+      // TODO: Allow them to join
+    } else if (
+      userState === 'playing' &&
+        (commandValue === 'fold' || commandValue === 'call' || commandValue.startsWith('raise_')
+      )) {
+        if (commandValue === 'fold') {
+
+
+        } else if (commandValue === 'call') {
+
+        } else if (commandValue.startsWith('raise_')) {
+          const matched = message.value.match(/^raise_([.\d]+)/);
+          const raiseAmount = matched && matched[1];
+        }
+      }
   } else if (message.type === 'Payment') {
     if (userState === 'spectating') {
       const maximumBuyin = game.maxBuyin;
@@ -155,16 +201,18 @@ bot.onEvent = async function(session, message) {
         session.reply(MSGS.startApp.buyin.simpleSuccess(ethValue));
         collectedAmount = ethValue;
       }
-      session.set('userState', 'playing');
+      session.set('userState', 'readyToPlay');
       session.set('balance', collectedAmount);
 
       try {
         await gameUser.update({
-          balance: collectedAmount
+          balance: collectedAmount,
+          status: 'readyToPlay'
         });
       } catch (e) {
         console.error(e.stack);
       }
+      session.set('userState', 'readyToPlay');
 
       // Reload game in case changes
       try {
@@ -183,13 +231,14 @@ bot.onEvent = async function(session, message) {
           bot,
           `${game.name}: A player bought in for ${collectedAmount}! There are now ${game.gameUsers.length} players in the game.`
         );
+
       } catch (e) {
         console.error(e.stack);
       }
 
       const numPlayers = game.gameUsers.length;
       if (numPlayers > 1) {
-        // Start game
+        return checkToStartGame(session, game);
       }
     } else { // Refund if they shouldn't be sending us money
       session.sendEth(ethValue, function(session, error, result) {
@@ -197,7 +246,6 @@ bot.onEvent = async function(session, message) {
       });
       reply(session, MSGS.other.noNeedForPayment);
     }
-  } else if (userState === 'playing') {
   } else if (!userState) {
     return sendStartMessage(session);
   } else {
@@ -356,6 +404,7 @@ async function joinOrCreateGame(session, userId, existingGameName, buyinAmount) 
       state: 'spectating',
       position
     });
+    reply(session, `You've been put at position ${position + 1} - and are currently spectating. You'll need to buyin to play`);
   } catch (e) {
     console.error(e.stack);
     console.error(e);

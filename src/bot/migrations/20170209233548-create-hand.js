@@ -18,8 +18,17 @@ module.exports = {
           type: Sequelize.ENUM('anteAndBlinds', 'preflop', 'flop', 'turn', 'river', 'complete'),
           allowNull: false,
         },
-        gameUserStatues: {
-            type: Sequelize.Sequelize.JSONB,
+        waitingGameUserId: {
+            type: Sequelize.INTEGER,
+            allowNull: true
+            references: { model: 'gameUsers', key: 'id' }
+          },
+        pokerCardStateData: {
+            type: Sequelize.JSONB,
+            defaultValue: {}
+          }
+        gameUserStatuses: {
+            type: Sequelize.JSONB,
             allowNull: true,
             defaultValue: []
           },
@@ -37,7 +46,7 @@ module.exports = {
         allowNull: false,
         defaultValue: 0
         },
-        bigblind: {
+        bigBlind: {
           type: Sequelize.INTEGER,
           allowNull: true,
         },

@@ -20,8 +20,9 @@ module.exports = {
         references: { model: 'users', key: 'id' }
       },
         state: {
-          type: Sequelize.ENUM('spectating', 'playing'),
+          type: Sequelize.ENUM('spectating', 'playing', 'readyToPlay', 'readyToLeave'),
           allowNull: false,
+          defaultValue: 'spectating'
         },
         position: {
           type: Sequelize.INTEGER,

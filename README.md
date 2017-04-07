@@ -1,12 +1,18 @@
 # Poken
-A poker game on Token. 
+A poker game on Token.
+
+### Feedback on Token Starter App
+
+- Need an ORM built in (we integrated in Sequelize, feel free to copy code)
+- Need a higher level library, rather than low-level calls (see our sample functions in src/bot.js)
+- Need a test harness that allows rapid development and testing without hitting Token Server (allows rapid development, and doesn't require Token to be working)
 
 ### Key components
 _Centralized_
 1. Game rooms
 2. Balances and Game Actions
 3. Card Gameplay
-4. Scoring System (using [][1]) 
+4. Scoring System (using [][1])
 
 _Decentralized_
 5. Dapp Poker application
@@ -31,13 +37,13 @@ Choice: Start game
 You got "Jack of Spades and King of Hearts" Actions: (Match/Check, Raise $set amount, Raise Custom, Fold)
 @jb matched
 @asda raised
-Total pot: 
+Total pot:
 
 Flop: Cards a/b/c.
 @jb checked
-Total pot: 
+Total pot:
 
-Turn: 
+Turn:
 
 River:
 
