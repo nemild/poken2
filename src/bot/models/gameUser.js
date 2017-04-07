@@ -3,6 +3,8 @@
 const User = require('./user');
 const Game = require('./game');
 
+// TODO: SET NEXT POSITION, beforeCreate
+
 module.exports = function(sequelize, DataTypes) {
   const GameUser = sequelize.define('gameUser', {
       gameId: {

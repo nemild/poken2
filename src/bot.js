@@ -146,10 +146,6 @@ bot.onEvent = async function(session, message) {
 
     }
   } else if (message.type === 'Payment') {
-    console.log(userState);
-    console.log(commandValue);
-    console.log(JSON.stringify(message, null, 2));
-
     if (userState === 'spectating') {
       const maximumBuyin = game.maxBuyin;
       const minimumBuyin = maximumBuyin / 100;
@@ -192,10 +188,9 @@ bot.onEvent = async function(session, message) {
       console.log(JSON.stringify(game, null, 2));
 
       try {
-        sendMessageToAll(game, `A player bought in for ${collectedAmount}!`);
+        await game.sendMessageToAll(bot, `A player bought in for ${collectedAmount}!`);
       } catch (e) {
         console.error(e.stack);
-
       }
     } else { // Refund if they shouldn't be sending us money
       session.sendEth(ethValue, function(session, error, result) {
@@ -203,6 +198,11 @@ bot.onEvent = async function(session, message) {
       });
       reply(session, MSGS.other.noNeedForPayment);
     }
+  } else if (userState === 'playing') {
+    if (true) {
+
+    }
+
   } else if (!userState) {
     return reply(
       session,
@@ -224,16 +224,21 @@ function goToNextPlayer(session, game) {
   // TODO: message next player and switch player
 }
 
-function checkToStartGame(session, game) {
+async function checkToStartGame(session, game) {
   if (game && game.state === 'waiting') {
-    return sendMessageToAll(
-      game,
-      MSGS.startApp.promptStartGame,
-      [
-        { label: 'Start the game!', value: 'start_game' },
-        { label: 'Wait for others...', value: 'wait_to_start' }
-      ]
-    );
+    try {
+      return await game.sendMessageToAll(
+        bot,
+        MSGS.startApp.promptStartGame,
+        [
+          { label: 'Start the game!', value: 'start_game' },
+          { label: 'Wait for others...', value: 'wait_to_start' }
+        ]
+      );
+    } catch (e) {
+      console.error(e.stack);
+      return null;
+    }
   }
 
   return null;
@@ -241,14 +246,6 @@ function checkToStartGame(session, game) {
 
 // Optional sendOptions function
 // Optional message
-function sendMessageToAll(game, message, responses = null) {
-  console.log(JSON.stringify(game.gameUsers, null, 2));
-  for (let i = 0, len = game.gameUsers.length; i < len; i += 1) {
-    const elem = game.gameUsers[i];
-    sendAll(elem.user.tokenIdee, message, responses);
-  }
-}
-
 function generateControls(responses) {
   const controls = [];
   if (!responses || responses.length === 0) {
@@ -261,20 +258,6 @@ function generateControls(responses) {
   }
 
   return controls;
-}
-
-function sendAll(userToken, message, responses) {
-  const controls = generateControls(responses);
-
-  const responseEnvelope = {
-    body: message
-  };
-
-  if (controls) {
-    responseEnvelope.controls = controls;
-  }
-
-  bot.client.send(userToken, SOFA.Message(responseEnvelope));
 }
 
 function reply(session, message, responses) {
