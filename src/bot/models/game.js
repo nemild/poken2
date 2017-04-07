@@ -1,10 +1,11 @@
+/* eslint no-undef: 0 */
+
 'use strict';
 
-const GameUser = require('./gameUser');
-const User = require('./user');
 const SOFA = require('sofa-js');
+const _ = require('lodash');
 
-function sendAll(bot, userToken, message, responses) {
+function sendToUser(bot, userToken, message, responses) {
   const controls = generateControls(responses);
 
   const responseEnvelope = {
@@ -59,8 +60,34 @@ module.exports = function(sequelize, DataTypes) {
     hooks: { },
     indexes: [],
     instanceMethods: {
+      sendToUser(bot, userToken, message, responses) {
+        sendToUser(bot, userToken, message, response);
+      },
+      async getRandomOpenPosition() {
+        let gameUsers;
+        const GameUser = sequelize.models.gameUser;
+        const User = sequelize.models.user;
+
+        try {
+          gameUsers = await GameUser.findAll({
+            where: {
+              gameId: this.id,
+              state: 'playing'
+            },
+            include: [User]
+          });
+        } catch (e) {
+          console.error(e.stack);
+        }
+
+        const currentPositions = _.map(gameUsers, 'position') || [];
+        return _.sample(_.difference(_.range(9), currentPositions));
+      },
       async sendMessageToAll(bot, message, responses = null) {
         let gameUsers;
+        const GameUser = sequelize.models.gameUser;
+        const User = sequelize.models.user;
+
         try {
           gameUsers = await GameUser.findAll({
             where: {
@@ -74,7 +101,7 @@ module.exports = function(sequelize, DataTypes) {
 
         for (let i = 0, len = gameUsers.length; i < len; i += 1) {
           const elem = gameUsers[i];
-          sendAll(bot, elem.user.tokenIdee, message, responses);
+          sendToUser(bot, elem.user.tokenIdee, message, responses);
         }
       },
       startGame() {

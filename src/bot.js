@@ -1,4 +1,4 @@
-/* eslint max-len: 0,no-unused-vars:0 */
+/* eslint max-len: 0,no-unused-vars:0, no-empty:0 */
 
 // Add max size, only applies to active players
 const Bot = require('./lib/Bot');
@@ -7,10 +7,10 @@ const _ = require('lodash');
 const models = require('./bot/models');
 const constants = require('./poker-constants.js');
 const unit = require('ethjs-unit');
+const allPokemon = require('./allPokemon.js');
 
 const MSGS = constants.MSGS;
 const NUMBER_TEXT_MAP = constants.NUMBER_TEXT_MAP;
-
 const sequelize = models.sequelize;
 const User = models.user;
 const Game = models.game;
@@ -40,6 +40,7 @@ bot.onEvent = async function(session, message) {
   let game = null;
   let gameUser = null;
 
+  // TODO: For join, collect money and seat them - or return money if no space
   if (gameId) {
     try {
       game = await Game.findOne({
@@ -83,24 +84,26 @@ bot.onEvent = async function(session, message) {
 
     if (gameUser) {
       try {
-        console.log('DESTROYED');
+        const balance = gameUser.balance;
         await gameUser.destroy();
+        session.sendEth(balance);
         if (game && game.gameUsers.length === 1) {
           await game.destroy();
+          reply(
+            session,
+            `Closed down empty game: ${game.name}`
+          );
         }
       } catch (e) {
         console.error(e.stack);
       }
     }
 
-    return reply(
+    reply(
       session,
-      `Session reset! ${MSGS.startApp.welcome}`,
-      [
-        { label: 'Start a new game', value: 'start' },
-        { label: 'Join existing', value: 'join_existing' }
-      ]
+      'Session reset!'
     );
+    return sendStartMessage(session);
   } else if (message.type === 'Command') {
     if (commandValue === 'start') { // TODO: Make sure not in a game
       session.set('userState', 'started');
@@ -115,35 +118,24 @@ bot.onEvent = async function(session, message) {
           { label: '10', value: 'max_buyin_10' }
         ]
       );
+    } else if (commandValue === 'join_existing') {
+      // TODO:
+      return await handleJoinListing(session);
+    } else if (userState === 'joining' && commandValue.startsWith('join_')) {
+      const matched = message.value.match(/^join_(.+)/);
+      const gameName = matched && matched[1];
+
+      if (!gameName) {
+        return await handleJoinListing(session);
+      }
+
+      await joinOrCreateGame(session, user.id, gameName.toLowerCase(), null);
     } else if (userState === 'started' && commandValue.startsWith('max_buyin_')) {
       const matched = message.value.match(/^max_buyin_([.\d]+)/);
       const decimalValue = parseFloat(matched[1]);
 
-      let newGame = null;
-      let gameUser = null;
-      try {
-        newGame = await Game.create({
-          maxBuyin: decimalValue,
-          bigBlind: decimalValue / 100,
-          state: 'waiting'
-        });
-
-        gameUser = await GameUser.create({
-          userId: user.id,
-          gameId: newGame.id,
-          state: 'spectating'
-        });
-        console.log(JSON.stringify(gameUser, null, 2));
-      } catch (e) {
-        console.error(e.stack);
-        console.error(e);
-      }
-      session.set('gameId', newGame.id);
-      session.set('userState', 'spectating');
-
-      session.requestEth(decimalValue, 'for buyin');
+      return await joinOrCreateGame(session, user.id, null, decimalValue);
     } else if (userState === 'spectating') {
-
     }
   } else if (message.type === 'Payment') {
     if (userState === 'spectating') {
@@ -154,7 +146,7 @@ bot.onEvent = async function(session, message) {
       if (ethValue < minimumBuyin) {
         session.sendEth(ethValue);
         reply(session, MSGS.startApp.buyin.belowMinimum(minimumBuyin));
-        return;
+        return null;
       } else if (ethValue > maximumBuyin) {
         session.sendEth(ethValue - maximumBuyin);
         reply(session, MSGS.startApp.buyin.aboveMaximum);
@@ -185,12 +177,19 @@ bot.onEvent = async function(session, message) {
       } catch (error) {
         console.error(error);
       }
-      console.log(JSON.stringify(game, null, 2));
 
       try {
-        await game.sendMessageToAll(bot, `A player bought in for ${collectedAmount}!`);
+        await game.sendMessageToAll(
+          bot,
+          `${game.name}: A player bought in for ${collectedAmount}! There are now ${game.gameUsers.length} players in the game.`
+        );
       } catch (e) {
         console.error(e.stack);
+      }
+
+      const numPlayers = game.gameUsers.length;
+      if (numPlayers > 1) {
+        // Start game
       }
     } else { // Refund if they shouldn't be sending us money
       session.sendEth(ethValue, function(session, error, result) {
@@ -199,26 +198,28 @@ bot.onEvent = async function(session, message) {
       reply(session, MSGS.other.noNeedForPayment);
     }
   } else if (userState === 'playing') {
-    if (true) {
-
-    }
-
   } else if (!userState) {
-    return reply(
-      session,
-      MSGS.startApp.welcome,
-      [
-        { label: 'Start a new game', value: 'start' },
-        { label: 'Join existing', value: 'join_existing' }
-      ]
-    );
+    return sendStartMessage(session);
   } else {
     return reply(
       session,
       MSGS.errors.unknown
     );
   }
+
+  return null;
 };
+
+function sendStartMessage(session) {
+  return reply(
+    session,
+    MSGS.startApp.welcome,
+    [
+      { label: 'Start a new game', value: 'start' },
+      { label: 'Join existing', value: 'join_existing' }
+    ]
+  );
+}
 
 function goToNextPlayer(session, game) {
   // TODO: message next player and switch player
@@ -274,3 +275,94 @@ function reply(session, message, responses) {
   session.reply(SOFA.Message(responseEnvelope));
 }
 
+async function handleJoinListing(session) {
+  let games;
+  try {
+    games = await Game.findAll({
+      limit: 5,
+      order: 'id DESC'
+    });
+  } catch (e) {
+    console.error(e.stack);
+  }
+  if (games && games.length > 0) {
+    const choices = _.map(games, function (game) {
+      return { label: game.name, value: `join_${game.name}` };
+    });
+
+    session.set('userState', 'joining');
+    return reply(
+      session,
+      'What game to join?',
+      choices
+    );
+  }
+
+  reply(
+    session,
+    'Sorry there are no games, create a game instead'
+  );
+  return sendStartMessage(session);
+}
+
+// Set buyin to null if existing game
+async function joinOrCreateGame(session, userId, existingGameName, buyinAmount) {
+  let game = null;
+  let gameUser = null;
+  try {
+    if (existingGameName) {
+      game = await Game.findOne({
+        where: {
+          name: existingGameName
+        }
+      });
+      buyinAmount = game.maxBuyin; // eslint-disable-line no-param-reassign
+
+      const gameUser = await GameUser.findOne({
+        where: {
+          userId,
+          gameId: game.id
+        }
+      });
+
+      if (gameUser) {
+        return reply(session, 'Sorry, you\'re trying to join a game that you\'re already part of');
+      }
+    } else {
+      const name = _.sample(allPokemon).toLowerCase();
+      game = await Game.create({
+        maxBuyin: buyinAmount,
+        bigBlind: buyinAmount / 100,
+        state: 'waiting',
+        name // TODO: Make sure no collisions, 500 options so not going to worry for now
+      });
+      reply(session, `New game created: ${name}`);
+    }
+
+    let position;
+    try {
+      position = await game.getRandomOpenPosition();
+    } catch (e) {
+      console.error(e.stack);
+    }
+
+    if (!position) {
+      return reply(session, MSGS.startApp.noSpaceRemaining);
+    }
+
+    gameUser = await GameUser.create({
+      userId,
+      gameId: game.id,
+      state: 'spectating',
+      position
+    });
+  } catch (e) {
+    console.error(e.stack);
+    console.error(e);
+  }
+  session.set('gameId', game.id);
+  session.set('userState', 'spectating');
+
+  session.requestEth(buyinAmount, 'for buyin');
+  return null;
+}

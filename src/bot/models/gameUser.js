@@ -24,10 +24,10 @@ module.exports = function(sequelize, DataTypes) {
         }
       },
         state: {
-          type: DataTypes.ENUM('spectating', 'sittingOut', 'playing', 'inHand', 'folded', 'allIn'),
+          type: DataTypes.ENUM('spectating', 'playing'),
           allowNull: false
         },
-        position: {
+        position: { // 0 - 8
             type: DataTypes.INTEGER,
             allowNull: true
           },

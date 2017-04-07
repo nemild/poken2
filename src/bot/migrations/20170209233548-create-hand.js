@@ -18,7 +18,7 @@ module.exports = {
           type: Sequelize.ENUM('anteAndBlinds', 'preflop', 'flop', 'turn', 'river', 'complete'),
           allowNull: false,
         },
-        gamePayments: {
+        gameUserStatues: {
             type: Sequelize.Sequelize.JSONB,
             allowNull: true,
             defaultValue: []
@@ -28,11 +28,20 @@ module.exports = {
             allowNull: true,
             defaultValue: 1
           },
+      currentPosition: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+      },
+      largestAmount: {
+        type: Sequelize.DECIMAL,
+        allowNull: false,
+        defaultValue: 0
+        },
         bigblind: {
           type: Sequelize.INTEGER,
           allowNull: true,
         },
-        littleBlind: {
+        smallBlind: {
             type: Sequelize.INTEGER,
             allowNull: true,
           },

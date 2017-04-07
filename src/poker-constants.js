@@ -5,6 +5,7 @@ module.exports.MSGS = {
   startApp: {
     welcome: 'Welcome to Poken: poker on Token! Do you want to start a new game or join an existing one? (And remember you can say \'restart\' at anytime to start over)',
     setMaxBuyin: 'What do you want the max buy in to be?',
+    noSpaceRemaining: 'Sorry, there isn\'t an space remaining in that game, pick another game',
     getBuyin(session, minBuyin, maxBuyin) {
       session.reply(`Great! Here's a payment request for the full amount. You can also send in any value above ${minBuyin}.`);
       session.requestEth(maxBuyin, 'to buy in at the maximum amount');
@@ -18,6 +19,12 @@ module.exports.MSGS = {
         return `Great, you've been added to the table, and your current balance is ${balance}.`;
       }
     }
+  },
+  handAction: {
+    standardAction: 'What do you want to do?'
+  },
+  hand: {
+    start(potBalance, actionOn) { return `Starting game, collected blinds. Pot is at ${potBalance}. It's ${actionOn}'s move`; }
   },
   dealerActions: {
     flop(cards) {
